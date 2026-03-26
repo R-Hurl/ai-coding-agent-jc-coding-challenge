@@ -1,0 +1,29 @@
+package main
+
+import (
+	"fmt"
+
+	"github.com/ryan/ai-coding-agent/playground/calculator"
+	"github.com/ryan/ai-coding-agent/playground/utils"
+)
+
+func main() {
+	a, b := 12.0, 4.0
+
+	fmt.Println(utils.FormatResult("Add", a, b, calculator.Add(a, b)))
+	fmt.Println(utils.FormatResult("Subtract", a, b, calculator.Subtract(a, b)))
+	fmt.Println(utils.FormatResult("Multiply", a, b, calculator.Multiply(a, b)))
+
+	result, err := calculator.Divide(a, b)
+	if err != nil {
+		fmt.Println("Divide error:", err)
+	} else {
+		fmt.Println(utils.FormatResult("Divide", a, b, result))
+	}
+
+	// Test divide by zero error handling
+	_, err = calculator.Divide(a, 0)
+	if err != nil {
+		fmt.Println("Divide error:", err)
+	}
+}

@@ -1,0 +1,9 @@
+# Environment / secrets
+.env
+
+# Go binaries
+ai-coding-agent
+playground/playground
+
+# Build artifacts
+*.out
