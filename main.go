@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -60,7 +61,7 @@ func main() {
 
 		history = append(history, Message{Role: "user", Content: input})
 
-		reply, updatedHistory, err := runAgent(apiKey, history)
+		reply, updatedHistory, err := runAgent(http.DefaultClient, apiKey, history)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			// Remove the user message we just added so history stays consistent
