@@ -10,7 +10,7 @@ This is a step-by-step coding challenge to build a simplified AI coding agent CL
 
 ```bash
 # Run the agent
-go run main.go
+go run .
 
 # Run the playground test project
 go run playground/main.go
@@ -24,10 +24,18 @@ go get <package>
 
 ## Architecture
 
-**`main.go`** — currently the single entry point. Contains:
-- `Message`, `ChatRequest`, `ChatResponse` structs that model the OpenAI `/v1/chat/completions` REST API
-- `chat(apiKey, prompt string) (string, error)` — makes a single HTTP POST to OpenAI and returns the reply text
-- `main()` — loads `.env` via `godotenv`, reads `OPENAI_API_KEY`, calls `chat()`, prints result
+**`main.go`** — entry point. Contains:
+- `main()` — loads `.env` via `godotenv`, reads `OPENAI_API_KEY`, runs the interactive REPL loop
+
+**`types.go`** — all OpenAI API structs:
+- `Message`, `ChatRequest`, `ChatResponse`, `ChatResponseChoice`
+- `ToolCall`, `FunctionCall`, `Tool`, `ToolFunction`
+
+**`agent.go`** — agent logic and API calls:
+- `chatOnce(apiKey, messages, tools)` — single non-streaming POST to OpenAI, returns full response
+- `runAgent(apiKey, history)` — agentic loop: calls `chatOnce`, executes tool calls, repeats until `finish_reason == "stop"`
+- `readFile(path)` — executes the `read_file` tool; returns file contents or an error string
+- `createToolList()` — returns the slice of tools available to the model
 
 **`playground/`** — a small multi-package Go app used as a test target for the agent (reading, editing, searching files). Not part of the agent itself.
 
