@@ -20,6 +20,12 @@ go build -o ai-coding-agent .
 
 # Add a dependency
 go get <package>
+
+# Run unit tests
+go test ./...
+
+# Run unit tests with verbose output
+go test -v ./...
 ```
 
 ## Architecture
