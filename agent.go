@@ -18,8 +18,12 @@ const (
 	toolCallReadFileFunctionName = "read_file"
 )
 
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 // chatOnce sends a non-streaming request to OpenAI and returns the full response.
-func chatOnce(apiKey string, messages []Message, tools []Tool) (ChatResponse, error) {
+func chatOnce(client HTTPClient, url string, apiKey string, messages []Message, tools []Tool) (ChatResponse, error) {
 	reqBody := ChatRequest{
 		Model:    openAIModel,
 		Messages: messages,
@@ -31,14 +35,14 @@ func chatOnce(apiKey string, messages []Message, tools []Tool) (ChatResponse, er
 		return ChatResponse{}, fmt.Errorf("marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", openAIURL, bytes.NewReader(body))
+	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("send request: %w", err)
 	}
@@ -75,10 +79,10 @@ func readFile(path string) string {
 // runAgent runs the agentic loop: sends the conversation to the model, executes any
 // tool calls, and repeats until the model produces a final text response.
 // Returns the reply text and the updated history (including all tool call/result turns).
-func runAgent(apiKey string, history []Message) (string, []Message, error) {
+func runAgent(client HTTPClient, apiKey string, history []Message) (string, []Message, error) {
 	tools := createToolList()
 	for {
-		chatResponse, err := chatOnce(apiKey, history, tools)
+		chatResponse, err := chatOnce(client, openAIURL, apiKey, history, tools)
 		if err != nil {
 			return "", history, err
 		}
