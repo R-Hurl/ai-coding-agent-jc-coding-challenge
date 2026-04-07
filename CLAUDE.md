@@ -40,7 +40,11 @@ go test -v ./...
 **`agent.go`** — agent logic and API calls:
 - `chatOnce(apiKey, messages, tools)` — single non-streaming POST to OpenAI, returns full response
 - `runAgent(apiKey, history)` — agentic loop: calls `chatOnce`, executes tool calls, repeats until `finish_reason == "stop"`
-- `readFile(path)` — executes the `read_file` tool; returns file contents or an error string
+- `readFile(path)` — returns file contents or an error string
+- `editFile(path, oldText, newText)` — replaces first occurrence of `oldText` with `newText` in a file
+- `writeFile(path, content)` — creates or overwrites a file; creates intermediate directories as needed
+- `globFiles(pattern)` — returns newline-joined file paths matching a glob pattern
+- `grepFiles(pattern)` — searches file contents for a regex; returns `filepath:linenum: line` matches
 - `createToolList()` — returns the slice of tools available to the model
 
 **`playground/`** — a small multi-package Go app used as a test target for the agent (reading, editing, searching files). Not part of the agent itself.

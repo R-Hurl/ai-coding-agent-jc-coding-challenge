@@ -2,6 +2,7 @@ package calculator
 
 import "errors"
 
+// Add returns the sum of a and b
 func Add(a, b float64) float64 {
 	return a + b
 }

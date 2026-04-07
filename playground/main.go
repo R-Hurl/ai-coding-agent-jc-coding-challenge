@@ -10,15 +10,15 @@ import (
 func main() {
 	a, b := 12.0, 4.0
 
-	fmt.Println(utils.FormatResult("Add", a, b, calculator.Add(a, b)))
-	fmt.Println(utils.FormatResult("Subtract", a, b, calculator.Subtract(a, b)))
-	fmt.Println(utils.FormatResult("Multiply", a, b, calculator.Multiply(a, b)))
+	fmt.Println(utils.FormatOutput("Add", a, b, calculator.Add(a, b)))
+	fmt.Println(utils.FormatOutput("Subtract", a, b, calculator.Subtract(a, b)))
+	fmt.Println(utils.FormatOutput("Multiply", a, b, calculator.Multiply(a, b)))
 
 	result, err := calculator.Divide(a, b)
 	if err != nil {
 		fmt.Println("Divide error:", err)
 	} else {
-		fmt.Println(utils.FormatResult("Divide", a, b, result))
+		fmt.Println(utils.FormatOutput("Divide", a, b, result))
 	}
 
 	// Test divide by zero error handling
