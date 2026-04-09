@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -27,10 +28,35 @@ const (
 	filePermissions               = fs.FileMode(0644)
 	toolCallGlobFunctionName      = "glob"
 	toolCallGrepFunctionName      = "grep"
+	toolCallBashFunctionName      = "bash"
 )
 
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
+}
+
+// defaultPermissions defines the permission mode for each tool.
+// allow: execute without asking. prompt: ask the user first. deny: never execute.
+var defaultPermissions = map[string]PermissionMode{
+	toolCallReadFileFunctionName:  PermissionAllow,
+	toolCallGlobFunctionName:      PermissionAllow,
+	toolCallGrepFunctionName:      PermissionAllow,
+	toolCallEditFileFunctionName:  PermissionPrompt,
+	toolCallWriteFileFunctionName: PermissionPrompt,
+	toolCallBashFunctionName:      PermissionPrompt,
+}
+
+// confirmWithUser displays the tool name and arguments, then asks the user to approve or deny.
+// Returns true if the user approves, false otherwise.
+func confirmWithUser(toolName, args string) bool {
+	fmt.Printf("Tool %q wants to run with arguments:\n%s\nAllow? (y/n): ", toolName, args)
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		response := strings.ToLower(strings.TrimSpace(scanner.Text()))
+		return response == "y" || response == "yes"
+	}
+
+	return false
 }
 
 // chatOnce sends a non-streaming request to OpenAI and returns the full response.
@@ -186,6 +212,22 @@ func grepFiles(pattern string) string {
 	return strings.Join(matches, "\n")
 }
 
+// bashTool executes command in a shell and returns stdout, stderr, and exit code as a string.
+func bashTool(command string) string {
+	cmd := exec.Command("sh", "-c", command)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			exitCode := exitError.ExitCode()
+			return fmt.Sprintf("Command failed with exit code %d\n%s", exitCode, string(output))
+		} else {
+			return fmt.Sprintf("Could not run command: %v\n", err)
+		}
+	}
+
+	return string(output)
+}
+
 // runAgent runs the agentic loop: sends the conversation to the model, executes any
 // tool calls, and repeats until the model produces a final text response.
 // Returns the reply text and the updated history (including all tool call/result turns).
@@ -210,56 +252,76 @@ func runAgent(client HTTPClient, apiKey string, history []Message) (string, []Me
 					continue
 				}
 				var result string
-				switch toolCall.FunctionCall.Name {
-				case toolCallReadFileFunctionName:
-					var args struct {
-						Path string `json:"path"`
+				// Check permission before executing the tool.
+				permission := defaultPermissions[toolCall.FunctionCall.Name]
+				if permission == PermissionDeny {
+					result = "Permission denied"
+				} else if permission == PermissionPrompt {
+					if !confirmWithUser(toolCall.FunctionCall.Name, toolCall.FunctionCall.Arguments) {
+						result = "Permission denied"
 					}
-					if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
-						return "", history, err
-					}
-					fmt.Printf("[tool: read_file(%q)]\n", args.Path)
-					result = readFile(args.Path)
-				case toolCallEditFileFunctionName:
-					var args struct {
-						Path    string `json:"path"`
-						OldText string `json:"old_text"`
-						NewText string `json:"new_text"`
-					}
-					if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
-						return "", history, err
-					}
-					fmt.Printf("[tool: edit_file(%q)]\n", args.Path)
-					result = editFile(args.Path, args.OldText, args.NewText)
-				case toolCallWriteFileFunctionName:
-					var args struct {
-						Path    string `json:"path"`
-						Content string `json:"content"`
-					}
-					if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
-						return "", history, err
-					}
-					fmt.Printf("[tool: write_file(%q)]\n", args.Path)
-					result = writeFile(args.Path, args.Content)
-				case toolCallGlobFunctionName:
-					var args struct {
-						Pattern string `json:"pattern"`
-					}
-					if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
-						return "", history, err
-					}
-					fmt.Printf("[tool: glob(%q)]\n", args.Pattern)
-					result = globFiles(args.Pattern)
-				case toolCallGrepFunctionName:
-					var args struct {
-						Pattern string `json:"pattern"`
-					}
-					if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
-						return "", history, err
-					}
-					fmt.Printf("[tool: grep(%q)]\n", args.Pattern)
-					result = grepFiles(args.Pattern)
 				}
+
+				if result == "" {
+					switch toolCall.FunctionCall.Name {
+					case toolCallReadFileFunctionName:
+						var args struct {
+							Path string `json:"path"`
+						}
+						if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
+							return "", history, err
+						}
+						fmt.Printf("[tool: read_file(%q)]\n", args.Path)
+						result = readFile(args.Path)
+					case toolCallEditFileFunctionName:
+						var args struct {
+							Path    string `json:"path"`
+							OldText string `json:"old_text"`
+							NewText string `json:"new_text"`
+						}
+						if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
+							return "", history, err
+						}
+						fmt.Printf("[tool: edit_file(%q)]\n", args.Path)
+						result = editFile(args.Path, args.OldText, args.NewText)
+					case toolCallWriteFileFunctionName:
+						var args struct {
+							Path    string `json:"path"`
+							Content string `json:"content"`
+						}
+						if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
+							return "", history, err
+						}
+						fmt.Printf("[tool: write_file(%q)]\n", args.Path)
+						result = writeFile(args.Path, args.Content)
+					case toolCallGlobFunctionName:
+						var args struct {
+							Pattern string `json:"pattern"`
+						}
+						if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
+							return "", history, err
+						}
+						fmt.Printf("[tool: glob(%q)]\n", args.Pattern)
+						result = globFiles(args.Pattern)
+					case toolCallGrepFunctionName:
+						var args struct {
+							Pattern string `json:"pattern"`
+						}
+						if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
+							return "", history, err
+						}
+						fmt.Printf("[tool: grep(%q)]\n", args.Pattern)
+						result = grepFiles(args.Pattern)
+					case toolCallBashFunctionName:
+						var args struct {
+							Command string `json:"command"`
+						}
+						if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
+							return "", history, err
+						}
+						result = bashTool(args.Command)
+					}
+				} // end permission check block
 				if result != "" {
 					history = append(history, Message{
 						Role:       "tool",
@@ -345,6 +407,20 @@ func createToolList() []Tool {
 						"pattern": {"type": "string", "description": "Regex pattern to search for"}
 					},
 					"required": ["pattern"]
+				}`),
+			},
+		},
+		{
+			Type: toolCallFunctionType,
+			Function: ToolFunction{
+				Name:        toolCallBashFunctionName,
+				Description: "Execute a shell command and return stdout, stderr, and exit code",
+				Parameters: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"command": {"type": "string", "description": "The shell command to execute"}
+					},
+					"required": ["command"]
 				}`),
 			},
 		},

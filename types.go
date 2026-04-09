@@ -45,6 +45,15 @@ type ChatResponseChoice struct {
 	FinishReason string  `json:"finish_reason"`
 }
 
+// PermissionMode controls whether a tool executes automatically, requires user confirmation, or is blocked.
+type PermissionMode string
+
+const (
+	PermissionAllow  PermissionMode = "allow"
+	PermissionPrompt PermissionMode = "prompt"
+	PermissionDeny   PermissionMode = "deny"
+)
+
 // Tool describes a function the model can call.
 type Tool struct {
 	Type     string       `json:"type"`
